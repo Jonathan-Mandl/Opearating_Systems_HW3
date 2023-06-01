@@ -253,18 +253,18 @@ void *dispatcher()
             {
                 if (sem_wait(&S_mutex) == -1)
                 {
-                    perror("Failed to wait for semaphore"); 
+                    perror("Failed to wait for semaphore");
                     exit(-1);
                 }
 
                 insert_unbounded(S_queue, message_unedited); // insert meessage to S dispatcher queue
 
-                if(sem_post(&S_mutex)==-1)
+                if (sem_post(&S_mutex) == -1)
                 {
                     perror("Failed to wait for semaphore");
                     exit(-1);
                 }
-                if (sem_post(&S_full)==-1)
+                if (sem_post(&S_full) == -1)
                 {
                     perror("Failed to post for semaphore");
                     exit(-1);
@@ -280,12 +280,12 @@ void *dispatcher()
 
                 insert_unbounded(N_queue, message_unedited); // insert meessage to N dispatcher queue
 
-                if(sem_post(&N_mutex)==-1)
+                if (sem_post(&N_mutex) == -1)
                 {
                     perror("Failed to wait for semaphore");
                     exit(-1);
                 }
-                if (sem_post(&N_full)==-1)
+                if (sem_post(&N_full) == -1)
                 {
                     perror("Failed to post for semaphore");
                     exit(-1);
@@ -301,12 +301,12 @@ void *dispatcher()
 
                 insert_unbounded(W_queue, message_unedited); // insert meessage to W dispatcher queue
 
-                if(sem_post(&W_mutex)==-1)
+                if (sem_post(&W_mutex) == -1)
                 {
                     perror("Failed to wait for semaphore");
                     exit(-1);
                 }
-                if (sem_post(&W_full)==-1)
+                if (sem_post(&W_full) == -1)
                 {
                     perror("Failed to post for semaphore");
                     exit(-1);
@@ -314,7 +314,6 @@ void *dispatcher()
             }
             else
             {
-
             }
             free(message);
             free(message_unedited);
@@ -323,57 +322,57 @@ void *dispatcher()
     // if dispatacher finished loop it means that it recieved done message from all its producers.
     // disptacher then sends done message to all its queues.
 
-    //send done message to S dispatcher queue
-    if (sem_wait(&S_mutex)==-1)
+    // send done message to S dispatcher queue
+    if (sem_wait(&S_mutex) == -1)
     {
         perror("Failed to wait for semaphore");
         exit(-1);
     }
     insert_unbounded(S_queue, "DONE");
-    if (sem_post(&S_mutex)==-1)
+    if (sem_post(&S_mutex) == -1)
     {
         perror("Failed to post for semaphore");
         exit(-1);
     }
-    if (sem_post(&S_full)==-1)
+    if (sem_post(&S_full) == -1)
     {
         perror("Failed to post for semaphore");
         exit(-1);
     }
 
-    //send done message to N dispatcher queue
-    if (sem_wait(&N_mutex)==-1)
+    // send done message to N dispatcher queue
+    if (sem_wait(&N_mutex) == -1)
     {
         perror("Failed to wait for semaphore");
         exit(-1);
     }
     insert_unbounded(N_queue, "DONE");
-    if (sem_post(&N_mutex)==-1)
+    if (sem_post(&N_mutex) == -1)
     {
         perror("Failed to post for semaphore");
         exit(-1);
     }
-    if (sem_post(&N_full)==-1)
+    if (sem_post(&N_full) == -1)
     {
         perror("Failed to post for semaphore");
         exit(-1);
     }
 
-    //send done message to W dispatcher queue
-    if (sem_wait(&W_mutex)==-1)
+    // send done message to W dispatcher queue
+    if (sem_wait(&W_mutex) == -1)
     {
         perror("Failed to wait for semaphore");
         exit(-1);
     }
 
     insert_unbounded(W_queue, "DONE");
-    
-    if (sem_post(&W_mutex)==-1)
+
+    if (sem_post(&W_mutex) == -1)
     {
         perror("Failed to post for semaphore");
         exit(-1);
     }
-    if (sem_post(&W_full)==-1)
+    if (sem_post(&W_full) == -1)
     {
         perror("Failed to post for semaphore");
         exit(-1);
@@ -388,11 +387,24 @@ void *coEditor_N()
 {
     while (1)
     {
-        sem_wait(&N_full);
-        sem_wait(&N_mutex);
+        if (sem_wait(&N_full) == -1)
+        {
+            perror("Failed to wait for semaphore");
+            exit(-1);
+        }
+        if (sem_wait(&N_mutex) == -1)
+        {
+            perror("Failed to wait for semaphore");
+            exit(-1);
+        }
         // remove message from dispatcher queue
         char *message = remove_message_unbounded(N_queue);
-        sem_post(&N_mutex);
+
+        if (sem_post(&N_mutex) == -1)
+        {
+            perror("Failed to post for semaphore");
+            exit(-1);
+        }
 
         // if meesage is not "DONE", block
         if (strcmp(message, "DONE") != 0)
@@ -401,14 +413,30 @@ void *coEditor_N()
             usleep(100000);
         }
 
-        sem_wait(&co_editor_empty);
-        sem_wait(&co_editor_mutex);
+        if (sem_wait(&co_editor_empty) == -1)
+        {
+            perror("Failed to wait for semaphore");
+            exit(-1);
+        }
+        if (sem_wait(&co_editor_mutex) == -1)
+        {
+            perror("Failed to wait for semaphore");
+            exit(-1);
+        }
 
         // send done message to co editors shared queue
         insert(co_Editor_Queue, message);
 
-        sem_post(&co_editor_mutex);
-        sem_post(&co_editor_full);
+        if (sem_post(&co_editor_mutex) == -1)
+        {
+            perror("Failed to post for semaphore");
+            exit(-1);
+        }
+        if (sem_post(&co_editor_full) == -1)
+        {
+            perror("Failed to post for semaphore");
+            exit(-1);
+        }
 
         // if message is done, break from loop
         if (strcmp(message, "DONE") == 0)
@@ -416,7 +444,7 @@ void *coEditor_N()
             free(message);
             break;
         }
-        free(message);
+        free(message); // free dynamic memory message
     }
     return NULL;
 }
@@ -424,11 +452,24 @@ void *coEditor_S()
 {
     while (1)
     {
-        sem_wait(&S_full);
-        sem_wait(&S_mutex);
+        if (sem_wait(&S_full) == -1)
+        {
+            perror("Failed to wait for semaphore");
+            exit(-1);
+        }
+        if (sem_wait(&S_mutex) == -1)
+        {
+            perror("Failed to wait for semaphore");
+            exit(-1);
+        }
         // remove message from dispatcher queue
         char *message = remove_message_unbounded(S_queue);
-        sem_post(&S_mutex);
+
+        if (sem_post(&S_mutex) == -1)
+        {
+            perror("Failed to post for semaphore");
+            exit(-1);
+        }
 
         // if meesage is not "DONE", block
         if (strcmp(message, "DONE") != 0)
@@ -437,21 +478,38 @@ void *coEditor_S()
             usleep(100000);
         }
 
-        sem_wait(&co_editor_empty);
-        sem_wait(&co_editor_mutex);
+        if (sem_wait(&co_editor_empty) == -1)
+        {
+            perror("Failed to wait for semaphore");
+            exit(-1);
+        }
+        if (sem_wait(&co_editor_mutex) == -1)
+        {
+            perror("Failed to wait for semaphore");
+            exit(-1);
+        }
 
         // send done message to co editors shared queue
         insert(co_Editor_Queue, message);
 
-        sem_post(&co_editor_mutex);
-        sem_post(&co_editor_full);
+        if (sem_post(&co_editor_mutex) == -1)
+        {
+            perror("Failed to post for semaphore");
+            exit(-1);
+        }
+        if (sem_post(&co_editor_full) == -1)
+        {
+            perror("Failed to post for semaphore");
+            exit(-1);
+        }
 
+        // if message is done, break from loop
         if (strcmp(message, "DONE") == 0)
         {
             free(message);
             break;
         }
-        free(message);
+        free(message); // free dynamic memory message
     }
     return NULL;
 }
@@ -459,11 +517,24 @@ void *coEditor_W()
 {
     while (1)
     {
-        sem_wait(&W_full);
-        sem_wait(&W_mutex);
+        if (sem_wait(&W_full) == -1)
+        {
+            perror("Failed to wait for semaphore");
+            exit(-1);
+        }
+        if (sem_wait(&W_mutex) == -1)
+        {
+            perror("Failed to wait for semaphore");
+            exit(-1);
+        }
         // remove message from dispatcher queue
         char *message = remove_message_unbounded(W_queue);
-        sem_post(&W_mutex);
+
+        if (sem_post(&W_mutex) == -1)
+        {
+            perror("Failed to post for semaphore");
+            exit(-1);
+        }
 
         // if meesage is not "DONE", block
         if (strcmp(message, "DONE") != 0)
@@ -472,23 +543,39 @@ void *coEditor_W()
             usleep(100000);
         }
 
-        sem_wait(&co_editor_empty);
-        sem_wait(&co_editor_mutex);
+        if (sem_wait(&co_editor_empty) == -1)
+        {
+            perror("Failed to wait for semaphore");
+            exit(-1);
+        }
+        if (sem_wait(&co_editor_mutex) == -1)
+        {
+            perror("Failed to wait for semaphore");
+            exit(-1);
+        }
 
         // send done message to co editors shared queue
         insert(co_Editor_Queue, message);
 
-        sem_post(&co_editor_mutex);
-        sem_post(&co_editor_full);
+        if (sem_post(&co_editor_mutex) == -1)
+        {
+            perror("Failed to post for semaphore");
+            exit(-1);
+        }
+        if (sem_post(&co_editor_full) == -1)
+        {
+            perror("Failed to post for semaphore");
+            exit(-1);
+        }
 
+        // if message is done, break from loop
         if (strcmp(message, "DONE") == 0)
         {
             free(message);
             break;
         }
-        free(message);
+        free(message); // free dynamic memory message
     }
-
     return NULL;
 }
 
@@ -497,13 +584,29 @@ void *screen_manager()
     int done_counter = 0;
     while (done_counter < 3)
     {
-        sem_wait(&co_editor_full);
-        sem_wait(&co_editor_mutex);
+        if (sem_wait(&co_editor_full) == -1)
+        {
+            perror("Failed to wait for semaphore");
+            exit(-1);
+        }
+        if (sem_wait(&co_editor_mutex) == -1)
+        {
+            perror("Failed to wait for semaphore");
+            exit(-1);
+        }
 
-        char *message = remove_message(co_Editor_Queue);
+        char *message = remove_message(co_Editor_Queue); // remove message from co-editor shared queue
 
-        sem_post(&co_editor_mutex);
-        sem_post(&co_editor_empty);
+        if (sem_post(&co_editor_mutex) == -1)
+        {
+            perror("Failed to post for semaphore");
+            exit(-1);
+        }
+        if (sem_post(&co_editor_empty) == -1)
+        {
+            perror("Failed to post for semaphore");
+            exit(-1);
+        }
 
         if (strcmp(message, "DONE") == 0)
         {
@@ -514,12 +617,11 @@ void *screen_manager()
 
         write(1, message, strlen(message));
 
-        free(message);
+        free(message); //free message from dynamic memroy
     }
 
     char *done = "DONE\n";
     write(1, done, strlen(done));
-
 
     return NULL;
 }
