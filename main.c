@@ -4,6 +4,7 @@
 #include <semaphore.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <time.h>
 #include "parse_configuration.h"
 #include "bounded_buffer.h"
 #include "unbounded_buffer.h"
@@ -16,11 +17,6 @@ typedef struct
     int queue_size;
 } producer_args;
 
-// global variables from configuration file parsing.
-extern Producer_Info *producers; // producers array stores the producer's information.
-extern int coEditorQueueSize;    // size of coeditor queue
-extern int numProducers;         // number of producers.
-
 // global array to store the queues of all producers. needs to be accessed by producer thread and dispatcher thread.
 Bounded_Buffer **Producer_Queues;
 
@@ -28,9 +24,9 @@ Bounded_Buffer **Producer_Queues;
 Bounded_Buffer *co_Editor_Queue;
 
 // global unbounded dispatcher queues
-struct Unbounded_Buffer *N_queue;
-struct Unbounded_Buffer *S_queue;
-struct Unbounded_Buffer *W_queue;
+Unbounded_Buffer *N_queue;
+Unbounded_Buffer *S_queue;
+Unbounded_Buffer *W_queue;
 
 // global arrays to store producers queues sempahores
 sem_t *producer_mutex;
@@ -66,20 +62,27 @@ void *producer(void *arg)
     int sports = 0;
     int weather = 0;
 
+    // Initialize the random number generator
+    srand(time(0));
+
     for (int i = 0; i < num_products; i++)
     {
         char message[100];
         // create beginning of message.
         snprintf(message, sizeof(message), "Producer %d ", id);
         char type[10];
-        // decide message type according to modulus function
-        if (i % 3 == 0)
+
+        // Generate a random number between 1 and 3
+        int randomNum = (rand() % 3) + 1;
+
+        // decide message type according random number generated
+        if (randomNum == 1)
         {
             strcpy(type, "NEWS");
             snprintf(message + strlen(message), sizeof(message) - strlen(message), "%s %d\n", type, news);
             news++;
         }
-        else if (i % 3 == 1)
+        else if (randomNum == 2)
         {
             strcpy(type, "SPORTS");
             snprintf(message + strlen(message), sizeof(message) - strlen(message), "%s %d\n", type, sports);
@@ -177,22 +180,23 @@ char *ExtractMessageType(const char *message)
     return messageType;
 }
 
-void *dispatcher()
+void *dispatcher(void* arg)
 {
+    int *numProducers = (int *)arg;
     // stores how many producers are still active.
-    int working_producers = numProducers;
+    int working_producers = *numProducers;
     // array for status of each queue: done/not done
-    int *producer_queue_status = malloc(numProducers * sizeof(int));
+    int *producer_queue_status = malloc(*numProducers * sizeof(int));
 
     // Initialize producer queue status
-    for (int i = 0; i < numProducers; i++)
+    for (int i = 0; i < *numProducers; i++)
     {
         producer_queue_status[i] = 1; // 1 indicates the queue is active
     }
     // runs while there are still producers who are not done
     while (working_producers)
     {
-        for (int i = 0; i < numProducers; i++)
+        for (int i = 0; i < *numProducers; i++)
         {
             if (producer_queue_status[i] == 0)
             {
@@ -581,7 +585,7 @@ void *coEditor_W()
 
 void *screen_manager()
 {
-    int done_counter = 0;
+    int done_counter = 0; //counts number of done messages received
     while (done_counter < 3)
     {
         if (sem_wait(&co_editor_full) == -1)
@@ -610,18 +614,18 @@ void *screen_manager()
 
         if (strcmp(message, "DONE") == 0)
         {
-            done_counter++;
-            free(message);
+            done_counter++; // up to number of done messages recieved
+            free(message); // free dynamic message memory
             continue;
         }
 
-        write(1, message, strlen(message));
+        write(1, message, strlen(message)); //print message on screen
 
         free(message); //free message from dynamic memroy
     }
 
     char *done = "DONE\n";
-    write(1, done, strlen(done));
+    write(1, done, strlen(done)); //print done message
 
     return NULL;
 }
@@ -635,7 +639,11 @@ int main(int argc, char *argv[])
     }
 
     // call function to parse configuration file.
-    parse_file(argv[1]);
+    Program_Stats* stats = parse_file(argv[1]); // function returns pointer to program_stats struct.
+
+    int numProducers=stats->numProducers;
+    int coEditorQueueSize = stats->coEditorQueueSize;
+    Producer_Info* producers=stats->producers;
 
     // initialize global array of producer queues using dynamic memeory allocation with numProducer size.
     Producer_Queues = (Bounded_Buffer **)malloc(numProducers * sizeof(Bounded_Buffer *));
@@ -758,7 +766,7 @@ int main(int argc, char *argv[])
     }
 
     // create thread for dispatcher.
-    if (pthread_create(&dispatcher_thread, NULL, dispatcher, NULL) != 0)
+    if (pthread_create(&dispatcher_thread, NULL,dispatcher, &numProducers) != 0)
     {
         perror("Thread creation failed");
         return 1;
@@ -866,6 +874,7 @@ int main(int argc, char *argv[])
     free(producer_empty);
     free(producer_threads);
     free(producers);
+    free(stats);
 
     return 0;
 }
