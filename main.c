@@ -46,6 +46,30 @@ sem_t co_editor_mutex;
 sem_t co_editor_empty;
 sem_t co_editor_full;
 
+// function to get message type.
+char *ExtractMessageType(const char *message)
+{
+    char *messageType = NULL;
+
+    // Find the third token (message type)
+    char *token = strtok((char *)message, " ");
+    for (int i = 0; i < 2; i++)
+    {
+        if (token == NULL)
+            return NULL; // Invalid format
+
+        token = strtok(NULL, " ");
+    }
+
+    // Extract the message type
+    if (token != NULL)
+    {
+        messageType = token;
+    }
+
+    return messageType;
+}
+
 // function for producer. called by producer thread.
 void *producer(void *arg)
 {
@@ -153,34 +177,11 @@ void *producer(void *arg)
         exit(-1);
     }
 
-    free(arg);
+    free(arg); // free dynamic memory used by function
     return NULL;
 }
 
-char *ExtractMessageType(const char *message)
-{
-    char *messageType = NULL;
-
-    // Find the third token (message type)
-    char *token = strtok((char *)message, " ");
-    for (int i = 0; i < 2; i++)
-    {
-        if (token == NULL)
-            return NULL; // Invalid format
-
-        token = strtok(NULL, " ");
-    }
-
-    // Extract the message type
-    if (token != NULL)
-    {
-        messageType = token;
-    }
-
-    return messageType;
-}
-
-void *dispatcher(void* arg)
+void *dispatcher(void *arg)
 {
     int *numProducers = (int *)arg;
     // stores how many producers are still active.
@@ -350,7 +351,9 @@ void *dispatcher(void* arg)
         perror("Failed to wait for semaphore");
         exit(-1);
     }
+
     insert_unbounded(N_queue, "DONE");
+
     if (sem_post(&N_mutex) == -1)
     {
         perror("Failed to post for semaphore");
@@ -387,154 +390,48 @@ void *dispatcher(void* arg)
     return NULL;
 }
 
-void *coEditor_N()
+void *coEditor(void *type)
 {
-    while (1)
+    sem_t *full;
+    sem_t *mutex;
+    Unbounded_Buffer *queue;
+    char *queue_type = (char *)type;
+
+    if (strcmp(queue_type, "N") == 0)
     {
-        if (sem_wait(&N_full) == -1)
-        {
-            perror("Failed to wait for semaphore");
-            exit(-1);
-        }
-        if (sem_wait(&N_mutex) == -1)
-        {
-            perror("Failed to wait for semaphore");
-            exit(-1);
-        }
-        // remove message from dispatcher queue
-        char *message = remove_message_unbounded(N_queue);
-
-        if (sem_post(&N_mutex) == -1)
-        {
-            perror("Failed to post for semaphore");
-            exit(-1);
-        }
-
-        // if meesage is not "DONE", block
-        if (strcmp(message, "DONE") != 0)
-        {
-            // block for 0.1 seconds
-            usleep(100000);
-        }
-
-        if (sem_wait(&co_editor_empty) == -1)
-        {
-            perror("Failed to wait for semaphore");
-            exit(-1);
-        }
-        if (sem_wait(&co_editor_mutex) == -1)
-        {
-            perror("Failed to wait for semaphore");
-            exit(-1);
-        }
-
-        // send done message to co editors shared queue
-        insert(co_Editor_Queue, message);
-
-        if (sem_post(&co_editor_mutex) == -1)
-        {
-            perror("Failed to post for semaphore");
-            exit(-1);
-        }
-        if (sem_post(&co_editor_full) == -1)
-        {
-            perror("Failed to post for semaphore");
-            exit(-1);
-        }
-
-        // if message is done, break from loop
-        if (strcmp(message, "DONE") == 0)
-        {
-            free(message);
-            break;
-        }
-        free(message); // free dynamic memory message
+        full = &N_full;
+        mutex = &N_mutex;
+        queue = N_queue;
     }
-    return NULL;
-}
-void *coEditor_S()
-{
-    while (1)
+    else if (strcmp(queue_type, "S") == 0)
     {
-        if (sem_wait(&S_full) == -1)
-        {
-            perror("Failed to wait for semaphore");
-            exit(-1);
-        }
-        if (sem_wait(&S_mutex) == -1)
-        {
-            perror("Failed to wait for semaphore");
-            exit(-1);
-        }
-        // remove message from dispatcher queue
-        char *message = remove_message_unbounded(S_queue);
-
-        if (sem_post(&S_mutex) == -1)
-        {
-            perror("Failed to post for semaphore");
-            exit(-1);
-        }
-
-        // if meesage is not "DONE", block
-        if (strcmp(message, "DONE") != 0)
-        {
-            // block for 0.1 seconds
-            usleep(100000);
-        }
-
-        if (sem_wait(&co_editor_empty) == -1)
-        {
-            perror("Failed to wait for semaphore");
-            exit(-1);
-        }
-        if (sem_wait(&co_editor_mutex) == -1)
-        {
-            perror("Failed to wait for semaphore");
-            exit(-1);
-        }
-
-        // send done message to co editors shared queue
-        insert(co_Editor_Queue, message);
-
-        if (sem_post(&co_editor_mutex) == -1)
-        {
-            perror("Failed to post for semaphore");
-            exit(-1);
-        }
-        if (sem_post(&co_editor_full) == -1)
-        {
-            perror("Failed to post for semaphore");
-            exit(-1);
-        }
-
-        // if message is done, break from loop
-        if (strcmp(message, "DONE") == 0)
-        {
-            free(message);
-            break;
-        }
-        free(message); // free dynamic memory message
+        full = &S_full;
+        mutex = &S_mutex;
+        queue = S_queue;
     }
-    return NULL;
-}
-void *coEditor_W()
-{
+    else
+    {
+        full = &W_full;
+        mutex = &W_mutex;
+        queue = W_queue;
+    }
+
     while (1)
     {
-        if (sem_wait(&W_full) == -1)
+        if (sem_wait(full) == -1)
         {
             perror("Failed to wait for semaphore");
             exit(-1);
         }
-        if (sem_wait(&W_mutex) == -1)
+        if (sem_wait(mutex) == -1)
         {
             perror("Failed to wait for semaphore");
             exit(-1);
         }
         // remove message from dispatcher queue
-        char *message = remove_message_unbounded(W_queue);
+        char *message = remove_message_unbounded(queue);
 
-        if (sem_post(&W_mutex) == -1)
+        if (sem_post(mutex) == -1)
         {
             perror("Failed to post for semaphore");
             exit(-1);
@@ -585,7 +482,7 @@ void *coEditor_W()
 
 void *screen_manager()
 {
-    int done_counter = 0; //counts number of done messages received
+    int done_counter = 0; // counts number of done messages received
     while (done_counter < 3)
     {
         if (sem_wait(&co_editor_full) == -1)
@@ -615,17 +512,17 @@ void *screen_manager()
         if (strcmp(message, "DONE") == 0)
         {
             done_counter++; // up to number of done messages recieved
-            free(message); // free dynamic message memory
+            free(message);  // free dynamic message memory
             continue;
         }
 
-        write(1, message, strlen(message)); //print message on screen
+        write(1, message, strlen(message)); // print message on screen
 
-        free(message); //free message from dynamic memroy
+        free(message); // free message from dynamic memroy
     }
 
     char *done = "DONE\n";
-    write(1, done, strlen(done)); //print done message
+    write(1, done, strlen(done)); // print done message
 
     return NULL;
 }
@@ -639,16 +536,16 @@ int main(int argc, char *argv[])
     }
 
     // call function to parse configuration file.
-    Program_Stats* stats = parse_file(argv[1]); // function returns pointer to program_stats struct.
+    Program_Stats *stats = parse_file(argv[1]); // function returns pointer to program_stats struct.
 
-    int numProducers=stats->numProducers;
+    int numProducers = stats->numProducers;
     int coEditorQueueSize = stats->coEditorQueueSize;
-    Producer_Info* producers=stats->producers;
+    Producer_Info *producers = stats->producers;
 
     // initialize global array of producer queues using dynamic memeory allocation with numProducer size.
     Producer_Queues = (Bounded_Buffer **)malloc(numProducers * sizeof(Bounded_Buffer *));
 
-    // initialize global semaphore arrays
+    // initialize global  producers semaphore arrays
     producer_mutex = (sem_t *)malloc(numProducers * sizeof(sem_t));
     producer_full = (sem_t *)malloc(numProducers * sizeof(sem_t));
     producer_empty = (sem_t *)malloc(numProducers * sizeof(sem_t));
@@ -737,17 +634,6 @@ int main(int argc, char *argv[])
     // initialize producer threads array
     pthread_t *producer_threads = (pthread_t *)malloc(numProducers * sizeof(pthread_t));
 
-    // initialize dispatcher thread
-    pthread_t dispatcher_thread;
-
-    // initilaize coeditor threads.
-    pthread_t n_co_editor_thread;
-    pthread_t s_co_editor_thread;
-    pthread_t w_co_editor_thread;
-
-    // initialize screen manager thread
-    pthread_t screen_manager_thread;
-
     // loop creates producer threads.
     for (int i = 0; i < numProducers; i++)
     {
@@ -765,31 +651,43 @@ int main(int argc, char *argv[])
         }
     }
 
-    // create thread for dispatcher.
-    if (pthread_create(&dispatcher_thread, NULL,dispatcher, &numProducers) != 0)
+    // create dispatcher thread
+    pthread_t dispatcher_thread;
+    if (pthread_create(&dispatcher_thread, NULL, dispatcher, &numProducers) != 0)
     {
         perror("Thread creation failed");
         return 1;
     }
 
-    // create co-editor threads
-    if (pthread_create(&n_co_editor_thread, NULL, coEditor_N, NULL) != 0)
+    // create N co-editor thread
+    pthread_t n_co_editor_thread;
+    char N_type[] = "N";
+    if (pthread_create(&n_co_editor_thread, NULL, coEditor, (void *)&N_type) != 0)
     {
         perror("Thread creation failed");
         return 1;
     }
-    if (pthread_create(&s_co_editor_thread, NULL, coEditor_S, NULL) != 0)
+
+    // create S co-editor thread
+    pthread_t s_co_editor_thread;
+    char S_type[] = "S";
+    if (pthread_create(&s_co_editor_thread, NULL, coEditor, (void *)&S_type) != 0)
     {
         perror("Thread creation failed");
         return 1;
     }
-    if (pthread_create(&w_co_editor_thread, NULL, coEditor_W, NULL) != 0)
+
+    // create W co-editor thread
+    pthread_t w_co_editor_thread;
+    char W_type[] = "W";
+    if (pthread_create(&w_co_editor_thread, NULL, coEditor, (void *)&W_type) != 0)
     {
         perror("Thread creation failed");
         return 1;
     }
 
     // create screen manager thread
+    pthread_t screen_manager_thread;
     if (pthread_create(&screen_manager_thread, NULL, screen_manager, NULL) != 0)
     {
         perror("Thread creation failed");
