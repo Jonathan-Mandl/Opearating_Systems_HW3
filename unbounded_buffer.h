@@ -5,10 +5,10 @@ struct Node {
     struct Node* next;
 };
 
-struct Unbounded_Buffer {
+typedef struct Unbounded_Buffer {
     struct Node* front;
     struct Node* rear;
-};
+} Unbounded_Buffer;
 
 struct Unbounded_Buffer* unbounded_buffer();
 
