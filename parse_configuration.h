@@ -7,12 +7,12 @@ typedef struct Producer_Info{
     int queueSize;
 } Producer_Info;
 
-extern Producer_Info *producers;
-extern int coEditorQueueSize;
-extern int numProducers;
+typedef struct Program_Stats{
+    Producer_Info *producers;
+    int coEditorQueueSize;
+    int numProducers;
+} Program_Stats;
 
-int read_line(int fd);
-    
-void parse_file(char* file_path);
+Program_Stats* parse_file(char* file_path);
 
 #endif
