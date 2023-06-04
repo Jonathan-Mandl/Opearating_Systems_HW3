@@ -20,16 +20,22 @@ Program_Stats *parse_file(char *file_path)
         exit(-1); // Exit the program with an error
     }
 
-    Program_Stats *stats = malloc(sizeof(Program_Stats)); // Allocate memory for Program_Stat
-    stats->numProducers = 0;                              // initialize number of producer to 0
-    stats->producers = NULL;                              // initialize producers array
+    Program_Stats *stats = malloc(sizeof(Program_Stats));
+    if (stats == NULL)
+    {
+        perror("Memory allocation failed!");
+        exit(-1);
+    }
+    // Allocate memory for Program_Stat
+    stats->numProducers = 0; // initialize number of producer to 0
+    stats->producers = NULL; // initialize producers array
 
     int producerId, numProducts, queueSize;
     int first_num, second_num, third_num;
 
     while (1)
     {
-        // read first num
+        // read first num. break from loop if file ended or line empty
         if (getline(&line, &len, file) == -1)
         {
             break;
@@ -38,9 +44,9 @@ Program_Stats *parse_file(char *file_path)
         {
             break;
         }
-        first_num = atoi(line);
+        first_num = atoi(line); //convert string line to number
 
-        // Read the second number
+        // Read the second num. break from loop if file ended or line empty
         if (getline(&line, &len, file) == -1)
         {
             break;
@@ -51,7 +57,7 @@ Program_Stats *parse_file(char *file_path)
         }
         second_num = atoi(line);
 
-        // Read the third number
+        // Read the third number. break from loop if file ended or line empty
         if (getline(&line, &len, file) == -1)
         {
             break;
@@ -74,7 +80,7 @@ Program_Stats *parse_file(char *file_path)
 
         stats->numProducers++;                                                                     // add 1 to number of producers
         stats->producers = realloc(stats->producers, stats->numProducers * sizeof(Producer_Info)); // Resize the producers array
-        if(stats->producers==NULL)
+        if (stats->producers == NULL)
         {
             perror("Memory allocation failed!");
             exit(-1);
@@ -86,11 +92,11 @@ Program_Stats *parse_file(char *file_path)
         getline(&line, &len, file); // read space between every group of 3 lines
     }
 
-    stats->coEditorQueueSize = first_num;
+    stats->coEditorQueueSize = first_num; // define co-editor queue size as the first number read before we broke from loop when file ended
 
-    fclose(file);
+    fclose(file); //close file
 
-    free(line);
+    free(line); //free dynamic memory
 
     return stats;
 }

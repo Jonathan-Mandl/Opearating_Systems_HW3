@@ -49,28 +49,27 @@ char *ExtractMessageType(const char *message)
     return messageType;
 }
 // function for producer. called by producer thread.
-void *producer(void *arg)
+void *producer(void *args)
 {
     // arguments struct of function.
-    producer_args *args = (producer_args *)arg;
+    producer_args *paramters = (producer_args *)args;
     // unpack arguments from struct.
-    int id = args->id;
-    int num_products = args->num_products;
+    int id = paramters->id;
+    int num_messages = paramters->num_products;
 
     // counter for messages types.
-    int news_counter = 0;
     int sports_counter = 0;
     int weather_counter = 0;
+    int news_counter = 0;
 
     // Initialize the random number generator
     srand(time(0));
 
-    for (int i = 0; i < num_products; i++)
+    for (int i = 0; i < num_messages; i++)
     {
         char message[100];
         // create beginning of message.
         snprintf(message, sizeof(message), "Producer %d ", id);
-        char type[10]; //message type.
 
         // Generate a random number between 1 and 3
         int randomNum = (rand() % 3) + 1;
@@ -78,21 +77,18 @@ void *producer(void *arg)
         // decide message type according random number generated. contcatenate message type to message.
         if (randomNum == 1)
         {
-            strcpy(type, "NEWS");
-            snprintf(message + strlen(message), sizeof(message) - strlen(message), "%s %d\n", type, news_counter);
-            news_counter++;
+            snprintf(message + strlen(message), sizeof(message) - strlen(message), "%s %d\n", "WEATHER", weather_counter);
+            weather_counter++;
         }
         else if (randomNum == 2)
         {
-            strcpy(type, "SPORTS");
-            snprintf(message + strlen(message), sizeof(message) - strlen(message), "%s %d\n", type, sports_counter);
-            sports_counter++;
+            snprintf(message + strlen(message), sizeof(message) - strlen(message), "%s %d\n", "NEWS", news_counter);
+            news_counter++;
         }
-        else
+        else // random ==3
         {
-            strcpy(type, "WEATHER");
-            snprintf(message + strlen(message), sizeof(message) - strlen(message), "%s %d\n", type, weather_counter);
-            weather_counter++;
+            snprintf(message + strlen(message), sizeof(message) - strlen(message), "%s %d\n", "SPORTS", sports_counter);
+            sports_counter++;
         }
         // insert message to queue of producer.
         insert(Producer_Queues[id], message);
@@ -100,7 +96,7 @@ void *producer(void *arg)
     // send done message when producer finished sending all messages.
     insert(Producer_Queues[id], "DONE");
 
-    free(arg); // free dynamic memory used by function
+    free(paramters); // free dynamic memory used by function
     return NULL;
 }
 
@@ -199,7 +195,7 @@ void *coEditor(void *type)
     {
         queue = S_queue;
     }
-    else
+    else // queue type is W
     {
         queue = W_queue;
     }
