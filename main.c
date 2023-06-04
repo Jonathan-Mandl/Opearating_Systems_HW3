@@ -28,7 +28,7 @@ Unbounded_Buffer *N_queue;
 Unbounded_Buffer *S_queue;
 Unbounded_Buffer *W_queue;
 
-// function to get message type.
+// function to get message type: sports, weather or news from  message.
 char *ExtractMessageType(const char *message)
 {
     char *messageType = NULL;
@@ -56,12 +56,11 @@ void *producer(void *arg)
     // unpack arguments from struct.
     int id = args->id;
     int num_products = args->num_products;
-    int queue_size = args->queue_size;
 
     // counter for messages types.
-    int news = 0;
-    int sports = 0;
-    int weather = 0;
+    int news_counter = 0;
+    int sports_counter = 0;
+    int weather_counter = 0;
 
     // Initialize the random number generator
     srand(time(0));
@@ -71,34 +70,33 @@ void *producer(void *arg)
         char message[100];
         // create beginning of message.
         snprintf(message, sizeof(message), "Producer %d ", id);
-        char type[10];
+        char type[10]; //message type.
 
         // Generate a random number between 1 and 3
         int randomNum = (rand() % 3) + 1;
 
-        // decide message type according random number generated
+        // decide message type according random number generated. contcatenate message type to message.
         if (randomNum == 1)
         {
             strcpy(type, "NEWS");
-            snprintf(message + strlen(message), sizeof(message) - strlen(message), "%s %d\n", type, news);
-            news++;
+            snprintf(message + strlen(message), sizeof(message) - strlen(message), "%s %d\n", type, news_counter);
+            news_counter++;
         }
         else if (randomNum == 2)
         {
             strcpy(type, "SPORTS");
-            snprintf(message + strlen(message), sizeof(message) - strlen(message), "%s %d\n", type, sports);
-            sports++;
+            snprintf(message + strlen(message), sizeof(message) - strlen(message), "%s %d\n", type, sports_counter);
+            sports_counter++;
         }
         else
         {
             strcpy(type, "WEATHER");
-            snprintf(message + strlen(message), sizeof(message) - strlen(message), "%s %d\n", type, weather);
-            weather++;
+            snprintf(message + strlen(message), sizeof(message) - strlen(message), "%s %d\n", type, weather_counter);
+            weather_counter++;
         }
         // insert message to queue of producer.
         insert(Producer_Queues[id], message);
-
-    }   
+    }
     // send done message when producer finished sending all messages.
     insert(Producer_Queues[id], "DONE");
 
@@ -113,6 +111,11 @@ void *dispatcher(void *arg)
     int working_producers = *numProducers;
     // array for status of each queue: done/not done
     int *producer_queue_status = malloc(*numProducers * sizeof(int));
+
+    if(producer_queue_status==NULL){
+           perror("Memory allocation failed!");
+           exit(-1);
+    }
 
     // Initialize producer queue status
     for (int i = 0; i < *numProducers; i++)
@@ -135,7 +138,7 @@ void *dispatcher(void *arg)
             }
             // Queue has message, process it
             char *message = remove_message(Producer_Queues[i]);
-            
+
             // if producer sends done message, make producer as inactive and continue.
             if (strcmp(message, "DONE") == 0)
             {
@@ -189,7 +192,7 @@ void *coEditor(void *type)
     char *queue_type = (char *)type;
 
     if (strcmp(queue_type, "N") == 0)
-    {   
+    {
         queue = N_queue;
     }
     else if (strcmp(queue_type, "S") == 0)
@@ -212,7 +215,7 @@ void *coEditor(void *type)
             // block for 0.1 seconds
             usleep(100000);
         }
-        
+
         // send done message to co editors shared queue
         insert(co_Editor_Queue, message);
 
@@ -232,7 +235,6 @@ void *screen_manager()
     int done_counter = 0; // counts number of done messages received
     while (done_counter < 3)
     {
-
         char *message = remove_message(co_Editor_Queue); // remove message from co-editor shared queue
 
         if (strcmp(message, "DONE") == 0)
@@ -241,7 +243,6 @@ void *screen_manager()
             free(message);  // free dynamic message memory
             continue;
         }
-
         write(1, message, strlen(message)); // print message on screen
 
         free(message); // free message from dynamic memroy
@@ -260,7 +261,6 @@ int main(int argc, char *argv[])
         printf("Usage: %s <file_path>\n", argv[0]);
         return 1;
     }
-
     // call function to parse configuration file.
     Program_Stats *stats = parse_file(argv[1]); // function returns pointer to program_stats struct.
 
@@ -270,6 +270,11 @@ int main(int argc, char *argv[])
 
     // initialize global array of producer queues using dynamic memeory allocation with numProducer size.
     Producer_Queues = (Bounded_Buffer **)malloc(numProducers * sizeof(Bounded_Buffer *));
+    if(Producer_Queues==NULL)
+    {
+           perror("Memory allocation failed!");
+           exit(-1);
+    }
 
     // initialize producer producers queues array;
     for (int i = 0; i < numProducers; i++)
@@ -289,12 +294,22 @@ int main(int argc, char *argv[])
 
     // initialize producer threads array
     pthread_t *producer_threads = (pthread_t *)malloc(numProducers * sizeof(pthread_t));
+    if (producer_threads==NULL)
+    {
+           perror("Memory allocation failed!");
+           exit(-1);
+    }
 
     // loop creates producer threads.
     for (int i = 0; i < numProducers; i++)
     {
         // stores producers function arguments is producer_args struct.
         producer_args *args = (producer_args *)malloc(sizeof(producer_args));
+        if(args==NULL)
+        {
+            perror("Memory allocation failed!");
+            exit(-1);
+        }
         args->id = producers[i].producerId;
         args->num_products = producers[i].numProducts;
         args->queue_size = producers[i].queueSize;
@@ -312,7 +327,7 @@ int main(int argc, char *argv[])
     if (pthread_create(&dispatcher_thread, NULL, dispatcher, &numProducers) != 0)
     {
         perror("Thread creation failed");
-        return 1;
+        exit(-1);
     }
 
     // create N co-editor thread
@@ -321,7 +336,7 @@ int main(int argc, char *argv[])
     if (pthread_create(&n_co_editor_thread, NULL, coEditor, (void *)&N_type) != 0)
     {
         perror("Thread creation failed");
-        return 1;
+        exit(-1);
     }
 
     // create S co-editor thread
@@ -330,7 +345,7 @@ int main(int argc, char *argv[])
     if (pthread_create(&s_co_editor_thread, NULL, coEditor, (void *)&S_type) != 0)
     {
         perror("Thread creation failed");
-        return 1;
+        exit(-1);
     }
 
     // create W co-editor thread
@@ -339,7 +354,7 @@ int main(int argc, char *argv[])
     if (pthread_create(&w_co_editor_thread, NULL, coEditor, (void *)&W_type) != 0)
     {
         perror("Thread creation failed");
-        return 1;
+        exit(-1);
     }
 
     // create screen manager thread
@@ -347,7 +362,7 @@ int main(int argc, char *argv[])
     if (pthread_create(&screen_manager_thread, NULL, screen_manager, NULL) != 0)
     {
         perror("Thread creation failed");
-        return 1;
+        exit(-1);
     }
 
     // Join the producer threads
@@ -356,7 +371,7 @@ int main(int argc, char *argv[])
         if (pthread_join(producer_threads[i], NULL) != 0)
         {
             perror("Thread join failed");
-            return 1;
+            exit(-1);
         }
     }
 
@@ -364,31 +379,31 @@ int main(int argc, char *argv[])
     if (pthread_join(dispatcher_thread, NULL) != 0)
     {
         perror("Thread join failed");
-        return 1;
+        exit(-1);
     }
 
     // Join the co-editor threads
     if (pthread_join(n_co_editor_thread, NULL) != 0)
     {
         perror("Thread join failed");
-        return 1;
+        exit(-1);
     }
     if (pthread_join(s_co_editor_thread, NULL) != 0)
     {
         perror("Thread join failed");
-        return 1;
+        exit(-1);
     }
     if (pthread_join(w_co_editor_thread, NULL) != 0)
     {
         perror("Thread join failed");
-        return 1;
+        exit(-1);
     }
 
     // join screen manager thread
     if (pthread_join(screen_manager_thread, NULL) != 0)
     {
         perror("Thread join failed");
-        return 1;
+        exit(-1);
     }
 
     // free dispatcher queues
