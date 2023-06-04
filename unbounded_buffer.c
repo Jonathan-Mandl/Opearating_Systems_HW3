@@ -3,13 +3,19 @@
 #include <string.h>
 #include "unbounded_buffer.h"
 
-// constructor fo runbounded buffer
+// constructor for unbounded buffer
 struct Unbounded_Buffer *unbounded_buffer()
 {
 
     struct Unbounded_Buffer *buffer = (struct Unbounded_Buffer *)malloc(sizeof(struct Unbounded_Buffer));
+    if (buffer==NULL)
+    {
+        perror("Memory allocation failed!");
+        exit(-1);
+    }
     buffer->front = NULL;
     buffer->rear = NULL;
+    // initialize all semaphores.
     if (sem_init(&buffer->mutex, 0, 1) == -1)
     {
         perror("Failed to initialize semaphore");
@@ -21,21 +27,24 @@ struct Unbounded_Buffer *unbounded_buffer()
         exit(-1);
     }
     return buffer;
-
 }
 
 // Function to insert a message into the buffer
 void insert_unbounded(struct Unbounded_Buffer *buffer, const char *message)
 {
-
+    // wait from mutex lock
     if (sem_wait(&buffer->mutex) == -1)
     {
         perror("Failed to wait for semaphore");
         exit(-1);
     }
-
     // Create a new node for the message
     struct Node *newNode = (struct Node *)malloc(sizeof(struct Node));
+    if (newNode == NULL)
+    {
+        perror("Memory allocation failed!");
+        exit(-1);
+    }
     strcpy(newNode->message, message);
     newNode->next = NULL;
 
@@ -51,12 +60,13 @@ void insert_unbounded(struct Unbounded_Buffer *buffer, const char *message)
         buffer->rear->next = newNode;
         buffer->rear = newNode;
     }
-
+    // unlock mutex
     if (sem_post(&buffer->mutex) == -1)
     {
         perror("Failed to wait for semaphore");
         exit(-1);
     }
+    // increase semaphore counter of full cells
     if (sem_post(&buffer->full) == -1)
     {
         perror("Failed to post for semaphore");
@@ -67,13 +77,13 @@ void insert_unbounded(struct Unbounded_Buffer *buffer, const char *message)
 // Function to remove a message from the buffer
 char *remove_message_unbounded(struct Unbounded_Buffer *buffer)
 {
+    // wait for semaphore of full cells
     if (sem_wait(&buffer->full) == -1)
     {
         perror("Failed to post for semaphore");
         exit(-1);
     }
-
-    
+    // lock mutex
     if (sem_wait(&buffer->mutex) == -1)
     {
         perror("Failed to wait for semaphore");
@@ -99,7 +109,7 @@ char *remove_message_unbounded(struct Unbounded_Buffer *buffer)
         // Buffer became empty, update the rear pointer
         buffer->rear = NULL;
     }
-
+    // unlock mutex
     if (sem_post(&buffer->mutex) == -1)
     {
         perror("Failed to wait for semaphore");
@@ -121,6 +131,18 @@ void destroy_unbounded_buffer(struct Unbounded_Buffer *buffer)
     }
     buffer->front = NULL;
     buffer->rear = NULL;
+
+
+    if(sem_destroy(&buffer->mutex)!=0)
+    {
+        perror("Semaphore destruction failed");
+        exit(-1);
+    }
+    if(sem_destroy(&buffer->full)!=0)
+    {
+        perror("Semaphore destruction failed");
+        exit(-1);
+    }
 
     free(buffer);
 }
